@@ -10,6 +10,8 @@ const { pool } = require('./db')
 const authRoutes = require('./routes/auth')
 const userRoutes = require('./routes/users')
 const workspaceRoutes = require('./routes/workspace')
+const privateRoutes = require('./routes/private')
+const companyRoutes = require('./routes/company')
 const { requireAuth } = require('./middleware/auth')
 
 function createApp() {
@@ -40,6 +42,8 @@ function createApp() {
   app.use('/api/auth', authRoutes)
   app.use('/api/users', requireAuth, userRoutes)
   app.use('/api/workspace', requireAuth, workspaceRoutes)
+  app.use('/api/private', requireAuth, privateRoutes)
+  app.use('/api/company', requireAuth, companyRoutes)
   app.use((_req, res) => res.status(404).json({ error: 'Recurso no encontrado' }))
   app.use((error, req, res, _next) => {
     req.log?.error({ err: error }, 'unhandled request error')
