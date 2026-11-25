@@ -4,6 +4,7 @@ const crypto = require('node:crypto')
 const { z } = require('zod')
 const { pool } = require('../db')
 const { blindIndex } = require('../crypto')
+const { sendPasswordReset } = require('../mailer')
 
 const loginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128) })
 
@@ -41,7 +42,7 @@ router.post('/password-reset/request', async (req, res, next) => {
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
         await pool.query('DELETE FROM password_resets WHERE user_id = $1 OR expires_at < NOW()', [rows[0].id])
         await pool.query('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'15 minutes\')', [rows[0].id, tokenHash])
-        // Delivery is intentionally delegated to the configured SMTP provider; the token is never returned or logged.
+        await sendPasswordReset(parsed.data.email, token)
       }
     }
     res.json({ message: 'Si la cuenta existe, recibirás instrucciones para recuperar el acceso.' })
