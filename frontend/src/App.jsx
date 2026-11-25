@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, { ...options, credentials: 'include', headers: { 'Content-Type': 'application/json', ...options.headers } })
   const payload = response.status === 204 ? null : await response.json()
-  if (!response.ok) throw new Error(payload?.error || 'No se pudo completar la operación')
+  if (!response.ok) { const error = new Error(payload?.error || 'No se pudo completar la operación'); error.status = response.status; throw error }
   return payload
 }
 
@@ -21,7 +21,7 @@ function Login({ onAuthenticated }) {
   async function handleSubmit(event) {
     event.preventDefault(); setLoading(true); setNotice('')
     try { const { user } = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }); onAuthenticated(user) }
-    catch (error) { setNotice(error.message === 'Failed to fetch' ? 'No se pudo conectar con el servicio seguro.' : 'Credenciales inválidas. Verifica tus datos e inténtalo de nuevo.') }
+    catch (error) { setNotice(error.message === 'Failed to fetch' || error.status >= 500 ? 'El servicio seguro no está disponible. Verifica PostgreSQL y el backend.' : 'Credenciales inválidas. Verifica tus datos e inténtalo de nuevo.') }
     finally { setLoading(false) }
   }
 
