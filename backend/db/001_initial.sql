@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   failed_attempts INTEGER NOT NULL DEFAULT 0, locked_until TIMESTAMPTZ, created_by UUID REFERENCES users(id), key_version INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS announcements (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), title VARCHAR(160) NOT NULL, body TEXT NOT NULL, created_by UUID NOT NULL REFERENCES users(id), pinned BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS activities (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, title_enc TEXT NOT NULL, description_enc TEXT NOT NULL, start_at TIMESTAMPTZ NOT NULL, end_at TIMESTAMPTZ NOT NULL, status VARCHAR(12) NOT NULL DEFAULT 'pendiente', priority VARCHAR(8) NOT NULL DEFAULT 'media', key_version INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS activities (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, assigned_by UUID REFERENCES users(id), title_enc TEXT NOT NULL, description_enc TEXT NOT NULL, start_enc TEXT, end_enc TEXT, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ, status VARCHAR(12) NOT NULL DEFAULT 'pendiente', priority VARCHAR(8) NOT NULL DEFAULT 'media', calendar_visibility VARCHAR(10) NOT NULL DEFAULT 'private', calendar_targets UUID[] NOT NULL DEFAULT ARRAY[]::UUID[], completion_note_enc TEXT, completed_at TIMESTAMPTZ, key_version INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS daily_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, report_date DATE NOT NULL, content_enc TEXT NOT NULL, key_version INTEGER NOT NULL DEFAULT 1, UNIQUE(owner_id, report_date));
 CREATE TABLE IF NOT EXISTS payments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), employee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, amount_enc TEXT NOT NULL, concept_enc TEXT NOT NULL, period DATE NOT NULL, key_version INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS documents (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), title_enc TEXT NOT NULL, content_enc TEXT NOT NULL, uploaded_by UUID NOT NULL REFERENCES users(id), key_version INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
@@ -25,7 +25,19 @@ CREATE TABLE IF NOT EXISTS messages (
   CONSTRAINT messages_no_self_delivery CHECK (sender_id <> recipient_id)
 );
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS key_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS assigned_by UUID REFERENCES users(id);
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS start_enc TEXT;
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS end_enc TEXT;
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS calendar_visibility VARCHAR(10) NOT NULL DEFAULT 'private';
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS calendar_targets UUID[] NOT NULL DEFAULT ARRAY[]::UUID[];
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS completion_note_enc TEXT;
+ALTER TABLE activities ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE activities ALTER COLUMN start_at DROP NOT NULL;
+ALTER TABLE activities ALTER COLUMN end_at DROP NOT NULL;
+UPDATE activities SET assigned_by = owner_id WHERE assigned_by IS NULL;
+CREATE TABLE IF NOT EXISTS activity_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE, employee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, note_enc TEXT, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_activities_owner_start ON activities(owner_id, start_at);
 CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_recipient_created ON messages(recipient_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_created ON messages(sender_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_reports_completed ON activity_reports(completed_at DESC);

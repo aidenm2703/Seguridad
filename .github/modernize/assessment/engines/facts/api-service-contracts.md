@@ -24,7 +24,9 @@ SecureVault Corp exposes one authenticated REST API on port 3000 and one React/V
 | Users | PATCH | `/api/users/:id/status` | jefe/isActive | updated status |
 | Users | PATCH | `/api/users/:id/role` | jefe/role | updated role |
 | Users | GET | `/api/users/events` | jefe | security events |
-| Workspace | GET/POST/DELETE | `/api/workspace/summary`, `/api/workspace/activities` | owner-scoped activity DTO | owner-scoped data |
+| Workspace | GET | `/api/workspace/summary` | authenticated session | own activities plus jefe-visible published calendar entries; jefe also receives completion reports and assignee directory |
+| Workspace | POST | `/api/workspace/activities` | jefe; assignee, encrypted schedule, priority and visibility | assigned activity; employees receive 403 |
+| Workspace | PATCH | `/api/workspace/activities/:id/complete` | assigned employee; optional encrypted note | completion acknowledgement and report timestamp |
 | Private | GET/POST | `/api/private/reports` | owner-scoped report DTO | encrypted report data after authorization |
 | Private | GET/POST | `/api/private/payments` | jefe creates; employee reads own | confidential payments |
 | Company | GET/POST | `/api/company/announcements` | authenticated; jefe creates | company announcements |
@@ -37,6 +39,8 @@ SecureVault Corp exposes one authenticated REST API on port 3000 and one React/V
 ## Security Contract
 
 - All functional routes require a PostgreSQL-backed session cookie. The server enforces role checks and ownership checks; frontend menu visibility is not a security boundary.
+- Only a jefe can create or assign activities. An employee can update only the completion state of an activity assigned to that employee; completion creates a jefe-readable report and an optional SMTP notification.
+- Activity title, description, start time, end time and completion note use AES-256-GCM. Calendar visibility is enforced server-side as private, all calendars, or an explicit active-user allowlist.
 - Message subject and body are encrypted with AES-256-GCM using a separate `MESSAGE_KEY`, a fresh 12-byte IV per field, and the message UUID as authenticated additional data. The database stores `iv.tag.data` and never stores message plaintext.
 - A recipient can read and mark only their own messages. A non-recipient receives a generic 404, avoiding resource existence disclosure.
 - SMTP notification text contains only the sender name and a link to the authenticated panel. It does not contain message subject or body.
@@ -65,20 +69,24 @@ sequenceDiagram
     participant Database as "PostgreSQL"
     participant Mail as "SMTP Provider"
 
-    Client->>Api: POST /api/messages
+    Client->>Api: POST /api/workspace/activities
     Api->>Session: Validate authenticated session
     Session-->>Api: User identity and role
-    Api->>Database: Validate active recipient
-    Database-->>Api: Recipient record
-    Api->>Api: Encrypt subject and body with MESSAGE_KEY
-    Api->>Database: Insert ciphertext message
-    Database-->>Api: Message id and timestamp
+    Api->>Database: Validate assignee and calendar targets
+    Database-->>Api: Active user records
+    Api->>Api: Encrypt activity fields with PRIVATE_KEY
+    Api->>Database: Insert encrypted activity
+    Database-->>Api: Activity id and timestamp
+    Api-->>Client: 201 ActivityAssigned
+    Client->>Api: PATCH /api/workspace/activities/id/complete
+    Api->>Database: Update assigned activity and insert report
+    Database-->>Api: Completion timestamp
     opt SMTP configured
-        Api-)Mail: Send notification without message content
+        Api-)Mail: Send completion notification without sensitive note
         Mail-->>Api: Accepted or unavailable
     end
-    Api-->>Client: 201 MessageCreated
-    Client->>Api: GET /api/messages?folder=inbox
+    Api-->>Client: 200 ActivityCompleted
+    Client->>Api: GET /api/messages
     Api->>Database: Query recipient mailbox
     Database-->>Api: Ciphertext rows
     Api->>Api: Verify GCM tag and decrypt authorized rows

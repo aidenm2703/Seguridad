@@ -30,4 +30,16 @@ async function sendMessageNotification(email, senderName) {
   return true
 }
 
-module.exports = { sendPasswordReset, sendMessageNotification }
+async function sendActivityCompletionNotification(email, employeeName, activityTitle) {
+  const currentTransporter = getTransporter()
+  if (!currentTransporter) return false
+  await currentTransporter.sendMail({
+    from: process.env.SMTP_FROM,
+    to: email,
+    subject: 'Actividad completada · SecureVault Corp',
+    text: `${employeeName} marcó como completada la actividad "${activityTitle}". Consulta el reporte dentro de SecureVault.`,
+  })
+  return true
+}
+
+module.exports = { sendPasswordReset, sendMessageNotification, sendActivityCompletionNotification }

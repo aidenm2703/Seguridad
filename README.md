@@ -34,4 +34,6 @@ Los nombres requeridos están documentados en [backend/.env.example](./backend/.
 
 La mensajería implementa cifrado en reposo y control de acceso server-side, no cifrado de extremo a extremo. El backend puede descifrar mensajes autorizados para entregarlos y auditarlos; E2E requeriría gestión de claves por dispositivo y recuperación segura.
 
+Las actividades se asignan exclusivamente desde el rol `jefe`. El empleado solo puede ver sus actividades autorizadas y marcarlas como hechas; cada finalización genera un reporte para el jefe y una notificación SMTP opcional. Las agendas cifran título, descripción y fechas con AES-256-GCM, y el jefe puede publicar una actividad para todos los calendarios o para una selección explícita.
+
 Las pruebas de seguridad deben ejecutarse únicamente contra la aplicación propia del equipo.

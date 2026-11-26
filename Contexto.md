@@ -89,7 +89,7 @@ Lo que **NO** puede ver un empleado de otro empleado (ni siquiera conociendo el 
 Lo que **SÍ** ve todo empleado:
 
 - **Información general de la empresa**: misión, políticas internas, anuncios, avisos, datos de contacto institucionales.
-- **Su propio calendario y sus propias actividades del día** (CRUD sobre lo suyo).
+- **Su propio calendario y sus actividades asignadas**; no puede crear tareas. Solo puede marcar una actividad como hecha y enviar el reporte al jefe.
 - **Su propio perfil** (datos enmascarados por defecto) y **sus propios pagos**.
 - Un **directorio mínimo** de compañeros (solo nombre y puesto), sin dirección, teléfono, correo personal ni nada privado. *(Decisión a confirmar: puede eliminarse si se quiere aislamiento total.)*
 
@@ -100,7 +100,7 @@ El **jefe** puede leer la información de todos los empleados y administrar las 
 | Recurso | Empleado | Jefe |
 |---|---|---|
 | Anuncios e información general de la empresa | ✅ lee | ✅ crea y edita |
-| Su propio calendario y actividades del día | ✅ CRUD | ✅ lee el de todos |
+| Su propio calendario y actividades del día | ✅ lee y marca como hecha | ✅ asigna y lee el de todos |
 | Calendario y actividades de otro empleado | ❌ 403/404 | ✅ lee |
 | Su propio reporte diario / lo que maneja | ✅ CRUD | ✅ lee el de todos |
 | Reporte diario / lo que maneja otro empleado | ❌ 403/404 | ✅ lee |
@@ -145,7 +145,7 @@ Técnicas adicionales:
 - **Blind index del correo:** `HMAC-SHA256(email_normalizado, llave_aparte)` para poder buscar por correo sin guardarlo en claro; el correo real va cifrado en otra columna.
 - **AAD en AES-GCM:** se pasa el `owner_id` como dato autenticado adicional. Si alguien copia un registro cifrado de un empleado a la fila de otro, el descifrado **falla**. Refuerza el aislamiento entre empleados incluso ante manipulación directa de la BD.
 - **Versión de llave (`key_version`)** en cada registro cifrado, para rotación de llaves (bonificación).
-- **Fechas y horas de actividades sin cifrar** (`start_at`, `end_at`) para ordenar el calendario en SQL; el título y la descripción sí van cifrados. Decisión justificada en el informe.
+- **Calendario cifrado**: título, descripción, fechas, notas de finalización y reglas de visibilidad se protegen en reposo. El servidor descifra únicamente las entradas autorizadas; el jefe puede publicar una actividad para todos o para calendarios seleccionados.
 
 ### Riesgo residual a documentar
 El jefe puede leer lo de los empleados porque **el servidor descifra** con las llaves. Es **cifrado en reposo**, no de extremo a extremo. Debe declararse como riesgo residual en el informe de seguridad.
