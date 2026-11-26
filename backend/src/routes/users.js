@@ -1,5 +1,6 @@
 const router = require('express').Router()
 const argon2 = require('argon2')
+const crypto = require('node:crypto')
 const { z } = require('zod')
 const { pool } = require('../db')
 const { encrypt, blindIndex } = require('../crypto')
@@ -15,7 +16,8 @@ router.post('/', async (req, res, next) => {
     const parsed = userSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Datos de cuenta inválidos' })
     const { email, name, password, role, position } = parsed.data
-    const { rows } = await pool.query('INSERT INTO users (email_hash, email_enc, name, password_hash, role, position, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, role, position, is_active', [blindIndex(email), encrypt(email, req.user.id), name, await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 }), role, position || null, req.user.id])
+    const userId = crypto.randomUUID()
+    const { rows } = await pool.query('INSERT INTO users (id, email_hash, email_enc, name, password_hash, role, position, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, role, position, is_active', [userId, blindIndex(email), encrypt(email, userId), name, await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 }), role, position || null, req.user.id])
     await pool.query('INSERT INTO security_events (user_id, event_type, ip, user_agent, metadata) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'user_created', req.ip, req.get('user-agent'), JSON.stringify({ created_user_id: rows[0].id, role })])
     res.status(201).json({ user: rows[0] })
   } catch (error) { next(error) }

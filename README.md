@@ -29,5 +29,9 @@ Los nombres requeridos están documentados en [backend/.env.example](./backend/.
 - Validación con Zod, consultas parametrizadas, CSP/Helmet, CORS restringido y rate limiting.
 - Autorización server-side y filtros por `owner_id` para prevenir IDOR.
 - Bitácora de accesos, cambios de rol y acciones sensibles sin guardar secretos.
+- Mensajería interna con AES-256-GCM y llave separada (`MESSAGE_KEY`), aislamiento por remitente/destinatario y versión de llave.
+- Notificaciones SMTP con TLS 1.2+ que solo incluyen un aviso y un enlace; el contenido sensible permanece dentro del panel autenticado.
+
+La mensajería implementa cifrado en reposo y control de acceso server-side, no cifrado de extremo a extremo. El backend puede descifrar mensajes autorizados para entregarlos y auditarlos; E2E requeriría gestión de claves por dispositivo y recuperación segura.
 
 Las pruebas de seguridad deben ejecutarse únicamente contra la aplicación propia del equipo.
