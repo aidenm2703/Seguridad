@@ -5,7 +5,9 @@ import './App.css'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, { ...options, credentials: 'include', headers: { 'Content-Type': 'application/json', ...options.headers } })
+  const request = { ...options, cache: 'no-store', credentials: 'include', headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'application/json', ...options.headers } }
+  let response = await fetch(`${API_URL}${path}`, request)
+  if (response.status === 304) response = await fetch(`${API_URL}${path}`, { ...request, headers: { ...request.headers, 'If-None-Match': '' } })
   const payload = response.status === 204 ? null : await response.json()
   if (!response.ok) { const error = new Error(payload?.error || 'No se pudo completar la operación'); error.status = response.status; throw error }
   return payload
@@ -56,7 +58,7 @@ function Dashboard({ user, onLogout }) {
   const boss = user.role === 'jefe'; const [view, setView] = useState('day'); const [data, setData] = useState({ activities: [], announcements: [], reports: [], payments: [], users: [], events: [], documents: [], profile: null }); const [loading, setLoading] = useState(true); const [feedback, setFeedback] = useState(''); const [modal, setModal] = useState(null)
   async function load(next = view) { const routes = { day: ['/api/workspace/summary'], announcements: ['/api/company/announcements'], reports: ['/api/private/reports'], payments: ['/api/private/payments'], profile: ['/api/private/profile'], team: ['/api/users'], security: ['/api/users/events'], documents: ['/api/private/documents'] }; setLoading(true); setFeedback(''); try { const payload = await api(routes[next][0]); setData((current) => ({ ...current, ...payload })) } catch (error) { setFeedback(error.status === 403 ? 'No tienes permisos para ver este módulo.' : 'No se pudo cargar este módulo. Revisa que el backend esté activo.') } finally { setLoading(false) } }
   useEffect(() => { const timer = setTimeout(() => load('day'), 0); return () => clearTimeout(timer) }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  function navigate(next) { setView(next); load(next) }
+  function navigate(next) { setView(next); if (next !== 'messages') load(next) }
   async function submit(path, body, message, refresh) { try { await api(path, { method: 'POST', body: JSON.stringify(body) }); setModal(null); setFeedback(message); await load(refresh) } catch (error) { setFeedback(error.message) } }
   async function update(path, body) { try { await api(path, { method: 'PATCH', body: JSON.stringify(body) }); setFeedback('Cambio guardado correctamente.'); await load(view) } catch (error) { setFeedback(error.message) } }
   async function openPayment() { try { const payload = data.users.length ? { users: data.users } : await api('/api/users'); setData((current) => ({ ...current, ...payload })); setModal('payment') } catch (error) { setFeedback(error.message) } }

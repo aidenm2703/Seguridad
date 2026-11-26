@@ -18,6 +18,7 @@ const { requireAuth } = require('./middleware/auth')
 function createApp() {
   const app = express()
   app.disable('x-powered-by')
+  app.set('etag', false)
   app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0)
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false }))
   app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173', credentials: true }))
