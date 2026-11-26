@@ -27,6 +27,7 @@ Los nombres requeridos están documentados en [backend/.env.example](./backend/.
 - Llave privada separada para pagos y documentos confidenciales.
 - Cookies de sesión HttpOnly, SameSite y Secure en producción.
 - Validación con Zod, consultas parametrizadas, CSP/Helmet, CORS restringido y rate limiting.
+- Protección CSRF para operaciones autenticadas y rechazo de secretos/configuración incompletos en producción.
 - Autorización server-side y filtros por `owner_id` para prevenir IDOR.
 - Bitácora de accesos, cambios de rol y acciones sensibles sin guardar secretos.
 - Mensajería interna con AES-256-GCM y llave separada (`MESSAGE_KEY`), aislamiento por remitente/destinatario y versión de llave.

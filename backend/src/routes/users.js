@@ -5,8 +5,9 @@ const { z } = require('zod')
 const { pool } = require('../db')
 const { encrypt, blindIndex } = require('../crypto')
 const { requireRole } = require('../middleware/auth')
+const { passwordSchema } = require('../security')
 
-const userSchema = z.object({ email: z.string().email().max(254), name: z.string().trim().min(2).max(100), password: z.string().min(12).max(128), role: z.enum(['empleado', 'jefe']).default('empleado'), position: z.string().trim().max(100).optional() })
+const userSchema = z.object({ email: z.string().email().max(254), name: z.string().trim().min(2).max(100), password: passwordSchema(z), role: z.enum(['empleado', 'jefe']).default('empleado'), position: z.string().trim().max(100).optional() })
 
 router.use(requireRole('jefe'))
 router.get('/', async (_req, res, next) => { try { const { rows } = await pool.query('SELECT id, name, role, position, is_active, created_at FROM users ORDER BY created_at DESC'); res.json({ users: rows }) } catch (error) { next(error) } })
@@ -22,7 +23,7 @@ router.post('/', async (req, res, next) => {
     res.status(201).json({ user: rows[0] })
   } catch (error) { next(error) }
 })
-router.patch('/:id/status', async (req, res, next) => { try { const { rows } = await pool.query('UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, is_active', [Boolean(req.body.isActive), req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Recurso no encontrado' }); res.json({ user: rows[0] }) } catch (error) { next(error) } })
-router.patch('/:id/role', async (req, res, next) => { try { const role = z.enum(['empleado', 'jefe']).parse(req.body.role); const { rows } = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, role', [role, req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Recurso no encontrado' }); await pool.query('INSERT INTO security_events (user_id, event_type, ip, user_agent, metadata) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'role_changed', req.ip, req.get('user-agent'), JSON.stringify({ target_user_id: req.params.id, role })]); res.json({ user: rows[0] }) } catch (error) { next(error) } })
+router.patch('/:id/status', async (req, res, next) => { try { const isActive = z.boolean().parse(req.body.isActive); if (req.params.id === req.user.id && !isActive) return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta' }); const { rows } = await pool.query('UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, is_active', [isActive, req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Recurso no encontrado' }); await pool.query('INSERT INTO security_events (user_id, event_type, ip, user_agent, metadata) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'user_status_changed', req.ip, req.get('user-agent'), JSON.stringify({ target_user_id: req.params.id, is_active: isActive })]); res.json({ user: rows[0] }) } catch (error) { next(error) } })
+router.patch('/:id/role', async (req, res, next) => { try { const role = z.enum(['empleado', 'jefe']).parse(req.body.role); if (req.params.id === req.user.id && role !== 'jefe') return res.status(400).json({ error: 'No puedes quitarte tus propios permisos de jefe' }); const { rows } = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, role', [role, req.params.id]); if (!rows[0]) return res.status(404).json({ error: 'Recurso no encontrado' }); await pool.query('INSERT INTO security_events (user_id, event_type, ip, user_agent, metadata) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'role_changed', req.ip, req.get('user-agent'), JSON.stringify({ target_user_id: req.params.id, role })]); res.json({ user: rows[0] }) } catch (error) { next(error) } })
 
 module.exports = router

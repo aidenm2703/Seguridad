@@ -1,12 +1,16 @@
 const router = require('express').Router()
 const argon2 = require('argon2')
 const crypto = require('node:crypto')
+const rateLimit = require('express-rate-limit')
 const { z } = require('zod')
 const { pool } = require('../db')
 const { blindIndex } = require('../crypto')
 const { sendPasswordReset } = require('../mailer')
+const { passwordSchema, issueCsrfToken } = require('../security')
 
 const loginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128) })
+const strongPasswordSchema = passwordSchema(z)
+const passwordResetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false })
 
 router.post('/login', async (req, res, next) => {
   try {
@@ -30,9 +34,11 @@ router.post('/login', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+router.get('/csrf', (req, res) => req.session.user ? res.json({ token: issueCsrfToken(req) }) : res.status(401).json({ error: 'Autenticación requerida' }))
+
 router.post('/logout', (req, res, next) => req.session.destroy((error) => error ? next(error) : res.status(204).end()))
 router.get('/me', (req, res) => req.session.user ? res.json({ user: req.session.user }) : res.status(401).json({ error: 'Autenticación requerida' }))
-router.post('/password-reset/request', async (req, res, next) => {
+router.post('/password-reset/request', passwordResetLimiter, async (req, res, next) => {
   try {
     const parsed = z.object({ email: z.string().email().max(254) }).safeParse(req.body)
     if (parsed.success) {
@@ -48,9 +54,9 @@ router.post('/password-reset/request', async (req, res, next) => {
     res.json({ message: 'Si la cuenta existe, recibirás instrucciones para recuperar el acceso.' })
   } catch (error) { next(error) }
 })
-router.post('/password-reset/complete', async (req, res, next) => {
+router.post('/password-reset/complete', passwordResetLimiter, async (req, res, next) => {
   try {
-    const parsed = z.object({ token: z.string().min(40).max(100), password: z.string().min(12).max(128) }).safeParse(req.body)
+    const parsed = z.object({ token: z.string().min(40).max(100), password: strongPasswordSchema }).safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Solicitud inválida' })
     const tokenHash = crypto.createHash('sha256').update(parsed.data.token).digest('hex')
     const passwordHash = await argon2.hash(parsed.data.password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 })

@@ -38,6 +38,8 @@ router.post('/payments', requireRole('jefe'), async (req, res, next) => {
     const parsed = paymentSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: 'Pago inválido' })
     const { employeeId, amount, concept, period } = parsed.data
+    const employee = await pool.query("SELECT id FROM users WHERE id = $1 AND is_active = TRUE AND role = 'empleado'", [employeeId])
+    if (!employee.rows[0]) return res.status(400).json({ error: 'El pago debe pertenecer a un empleado activo' })
     const { rows } = await pool.query('INSERT INTO payments (employee_id, amount_enc, concept_enc, period) VALUES ($1, $2, $3, $4) RETURNING id, employee_id, period', [employeeId, encrypt(amount, employeeId, 'CONFIDENTIAL_KEY'), encrypt(concept, employeeId, 'CONFIDENTIAL_KEY'), period])
     await pool.query('INSERT INTO security_events (user_id, event_type, ip, user_agent, metadata) VALUES ($1, $2, $3, $4, $5)', [req.user.id, 'payment_created', req.ip, req.get('user-agent'), JSON.stringify({ employee_id: employeeId, payment_id: rows[0].id })])
     res.status(201).json({ payment: rows[0] })

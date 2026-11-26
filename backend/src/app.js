@@ -14,12 +14,15 @@ const privateRoutes = require('./routes/private')
 const companyRoutes = require('./routes/company')
 const messageRoutes = require('./routes/messages')
 const { requireAuth } = require('./middleware/auth')
+const { csrfProtection, ensureProductionConfiguration } = require('./security')
 
 function createApp() {
+  ensureProductionConfiguration()
   const app = express()
   app.disable('x-powered-by')
   app.set('etag', false)
   app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0)
+  if (process.env.NODE_ENV === 'production') app.use((req, res, next) => req.get('x-forwarded-proto') === 'https' ? next() : res.redirect(`https://${req.get('host')}${req.originalUrl}`))
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false }))
   app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173', credentials: true }))
   app.use(express.json({ limit: '32kb' }))
@@ -27,11 +30,12 @@ function createApp() {
   app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false }))
   app.use(session({
     store: new PgSession({ pool, createTableIfMissing: true }),
-    secret: process.env.SESSION_SECRET || 'development-only-change-me',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 },
   }))
+  app.use(csrfProtection)
 
   app.get('/health', async (_req, res) => {
     try {

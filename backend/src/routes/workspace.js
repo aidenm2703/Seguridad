@@ -56,6 +56,8 @@ router.post('/activities', requireRole('jefe'), async (req, res, next) => {
     const parsed = activitySchema.safeParse(req.body)
     if (!parsed.success || new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)) return res.status(400).json({ error: 'Datos de actividad inválidos' })
     const a = parsed.data; const targetIds = a.visibility === 'selected' ? [...new Set([a.assigneeId, ...a.selectedUserIds])] : []
+    const assignee = await pool.query("SELECT id FROM users WHERE id = $1 AND is_active = TRUE AND role = 'empleado'", [a.assigneeId])
+    if (!assignee.rows[0]) return res.status(400).json({ error: 'El responsable debe ser un empleado activo' })
     if (a.visibility === 'selected') {
       const targetCheck = await pool.query('SELECT id FROM users WHERE is_active = TRUE AND id = ANY($1::uuid[])', [targetIds])
       if (targetCheck.rows.length !== targetIds.length) return res.status(400).json({ error: 'Selecciona calendarios activos' })
